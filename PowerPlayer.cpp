@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <string.h>
 
 #include <windows.h>
@@ -8,8 +9,9 @@
 
 #define WINDOW_CLASS_NAME "PPParent"
 
-#define IDM_ICONMENU_BASE 0x1000
-#define IDM_ICONMENU_QUIT (IDM_ICONMENU_BASE + 0x0)
+#define IDM_ICONMENU_BASE        0x1000
+#define IDM_ICONMENU_CTRLPANEL   (IDM_ICONMENU_BASE + 0x0)
+#define IDM_ICONMENU_QUIT        (IDM_ICONMENU_BASE + 0x1)
 
 #define IDM_ICONMENU_SCHEME_BASE (IDM_ICONMENU_BASE + 0x100)
 
@@ -66,7 +68,7 @@ void listDestroy(ListNode *list) {
     }
 }
 
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 HMENU buildMenu(HWND parentWindow, ListNode *schemeList);
 ListNode *getPowerSchemes();
 
@@ -97,7 +99,7 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
     char *szTip = "PowerPlayer";
 
     NOTIFYICONDATAA iconData = {0};
-    iconData.cbSize = sizeof(iconData);
+    iconData.cbSize = sizeof(NOTIFYICONDATAA);
     iconData.hWnd = parentWindow;
     iconData.uID = ICON_ID;
     iconData.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
@@ -118,36 +120,78 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
     return 0;
 }
 
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch(uMsg) {
         case WM_ICON_MESSAGE:
             switch(lParam) {
-                case WM_MOUSEMOVE:
-                    // TODO(Adin): Update icon tooltip to have the current power profile
+                case WM_MOUSEMOVE: {
+                    GUID *currentScheme = NULL;
+                    wchar_t *name = NULL;
+                    DWORD nameSize = 0;
+                    char szTip[128] = {0};
+                    
+                    PowerGetActiveScheme(NULL, &currentScheme);
+                    PowerReadFriendlyName(NULL, currentScheme, NULL, NULL, NULL, &nameSize);
+                    name = (wchar_t *) malloc(nameSize);
+                    PowerReadFriendlyName(NULL, currentScheme, NULL, NULL, (UCHAR *) name, &nameSize);
+                    snprintf(&szTip[0], 128, "PowerPlayer\n%S", name);
+                    if(wcslen(name) + 12 > 127) {
+                        // Add trailing "..." if the current scheme is too large for the tip
+                        memset(&szTip[125], '.', 3);
+                    }
+
+                    NOTIFYICONDATAA iconData = {0}; 
+                    iconData.cbSize = sizeof(NOTIFYICONDATAA);
+                    iconData.hWnd = hWnd;
+                    iconData.uID = ICON_ID;
+                    iconData.uFlags = NIF_TIP;
+                    memcpy(iconData.szTip, szTip, strlen(szTip));
+
+                    Shell_NotifyIconA(NIM_MODIFY, &iconData);
+
+                    free(name);
+                    LocalFree(currentScheme);
+                    
                     break;
+                }
 
                 case WM_RBUTTONDOWN: {
                     ListNode *schemeList = getPowerSchemes();
-                    HMENU menu = buildMenu(hwnd, schemeList);
+                    HMENU menu = buildMenu(hWnd, schemeList);
                     int menuChoice = 0;
                     POINT cursorPos;
                     GetCursorPos(&cursorPos);
 
-                    SetForegroundWindow(hwnd);
-                    menuChoice = TrackPopupMenu(menu, GetSystemMetrics(SM_MENUDROPALIGNMENT) | TPM_RETURNCMD | TPM_NONOTIFY, cursorPos.x, cursorPos.y, 0, hwnd, NULL);
-                    PostMessageA(hwnd, WM_NULL, 0, 0);
+                    SetForegroundWindow(hWnd);
+                    menuChoice = TrackPopupMenu(menu, GetSystemMetrics(SM_MENUDROPALIGNMENT) | TPM_RETURNCMD | TPM_NONOTIFY, cursorPos.x, cursorPos.y, 0, hWnd, NULL);
+                    PostMessageA(hWnd, WM_NULL, 0, 0);
 
                     DestroyMenu(menu);
 
-                    if(menuChoice == IDM_ICONMENU_QUIT) {
-                        // User chose to quit
-                        PostQuitMessage(0);
-                    } 
-                    else {
-                        // User chose a power scheme
-                        int chosenSchemeIndex = menuChoice - IDM_ICONMENU_SCHEME_BASE;
-                        PowerScheme chosenScheme = listGetData(schemeList, chosenSchemeIndex);
-                        PowerSetActiveScheme(NULL, &chosenScheme.guid);
+                    switch(menuChoice) {
+                        case IDM_ICONMENU_CTRLPANEL: {
+                            // User chose control panel
+                            char command[MAX_PATH + 50 + 1]; // Max path length + length of control panel and options + byte for null terminator
+                            GetWindowsDirectoryA(&command[0], MAX_PATH);
+                            sprintf(&command[strlen(command)], "%s", "\\system32\\control.exe /name Microsoft.PowerOptions");
+                            WinExec(command, SW_SHOW);
+
+                            break;
+                        }
+
+                        case IDM_ICONMENU_QUIT: {
+                            // User chose to quit
+                            PostQuitMessage(0);
+                        }
+
+                        default: {
+                            // User chose a power scheme
+                            int chosenSchemeIndex = menuChoice - IDM_ICONMENU_SCHEME_BASE;
+                            PowerScheme chosenScheme = listGetData(schemeList, chosenSchemeIndex);
+                            PowerSetActiveScheme(NULL, &chosenScheme.guid);
+
+                            break;
+                        }
                     }
 
                     listDestroy(schemeList);
@@ -158,7 +202,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             return 0;
 
         default:
-            return DefWindowProc(hwnd, uMsg, wParam, lParam);
+            return DefWindowProc(hWnd, uMsg, wParam, lParam);
     }
 }
 
@@ -174,6 +218,8 @@ HMENU buildMenu(HWND parentWindow, ListNode *schemeList) {
             listIndex++;
         }
 
+        AppendMenuA(menu, MF_SEPARATOR, 0, NULL);
+        AppendMenuA(menu, MF_STRING, IDM_ICONMENU_CTRLPANEL, "Open Power Settings");
         AppendMenuA(menu, MF_SEPARATOR, 0, NULL);
         AppendMenuA(menu, MF_STRING, IDM_ICONMENU_QUIT, "Quit");
     }
