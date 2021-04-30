@@ -71,6 +71,7 @@ void listDestroy(ListNode *list) {
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 HMENU buildMenu(HWND parentWindow, ListNode *schemeList);
 ListNode *getPowerSchemes();
+void openPowerSettings();
 
 int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
     WNDCLASSA windowClass = {0};
@@ -124,6 +125,10 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
     switch(uMsg) {
         case WM_ICON_MESSAGE:
             switch(lParam) {
+                case WM_LBUTTONDBLCLK:
+                    openPowerSettings();
+                    break;
+
                 case WM_MOUSEMOVE: {
                     GUID *currentScheme = NULL;
                     wchar_t *name = NULL;
@@ -171,11 +176,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                     switch(menuChoice) {
                         case IDM_ICONMENU_CTRLPANEL: {
                             // User chose control panel
-                            char command[MAX_PATH + 50 + 1]; // Max path length + length of control panel and options + byte for null terminator
-                            GetWindowsDirectoryA(&command[0], MAX_PATH);
-                            sprintf(&command[strlen(command)], "%s", "\\system32\\control.exe /name Microsoft.PowerOptions");
-                            WinExec(command, SW_SHOW);
-
+                            openPowerSettings();
                             break;
                         }
 
@@ -261,4 +262,12 @@ ListNode *getPowerSchemes() {
     LocalFree(activeScheme);
 
     return list;
+}
+
+void openPowerSettings() {
+    char command[MAX_PATH + 50 + 1]; // Max path length + length of control panel and options + byte for null terminator
+
+    GetWindowsDirectoryA(&command[0], MAX_PATH);
+    sprintf(&command[strlen(command)], "%s", "\\system32\\control.exe /name Microsoft.PowerOptions");
+    WinExec(command, SW_SHOW);
 }
