@@ -88,7 +88,7 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
         return 1;
     }
 
-    HICON hIcon = (HICON) LoadImageA(NULL, "PowerPlayer.ico", IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE);
+    HICON hIcon = LoadIconA(hInstance, "MainIcon");
     if(!hIcon) {
         MessageBoxA(NULL, "Failed to load icon!", "PowerPlayer: Error", MB_ICONERROR | MB_OK);
         return 1;
