@@ -4,7 +4,7 @@
 #include <windows.h>
 #include <powrprof.h>
 
-#define ICON_ID 1
+#define NOTIF_ICON_ID 1
 #define WM_ICON_MESSAGE (WM_USER)
 
 #define WINDOW_CLASS_NAME "PPParent"
@@ -69,9 +69,12 @@ void listDestroy(ListNode *list) {
 }
 
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+void createNotifIcon(HWND parentWindow);
 HMENU buildMenu(HWND parentWindow, ListNode *schemeList);
 ListNode *getPowerSchemes();
 void openPowerSettings();
+
+static int WM_TASKBARCREATED;
 
 int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
     WNDCLASSA windowClass = {0};
@@ -91,24 +94,7 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
         return 1;
     }
 
-    HICON hIcon = LoadIconA(hInstance, "MainIcon");
-    if(!hIcon) {
-        MessageBoxA(NULL, "Failed to load icon!", "PowerPlayer: Error", MB_ICONERROR | MB_OK);
-        return 1;
-    }
-
-    char *szTip = "PowerPlayer";
-
-    NOTIFYICONDATAA iconData = {0};
-    iconData.cbSize = sizeof(NOTIFYICONDATAA);
-    iconData.hWnd = parentWindow;
-    iconData.uID = ICON_ID;
-    iconData.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
-    iconData.uCallbackMessage = WM_ICON_MESSAGE;
-    iconData.hIcon = hIcon;
-    memcpy(iconData.szTip, szTip, strlen(szTip));
-
-    Shell_NotifyIconA(NIM_ADD, &iconData);
+    createNotifIcon(parentWindow);
 
     MSG msg = {0};
     while(GetMessage(&msg, NULL, 0, 0)) {
@@ -116,12 +102,18 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
         DispatchMessage(&msg);
     }
 
+    NOTIFYICONDATAA iconData = {0};
+    iconData.cbSize = sizeof(NOTIFYICONDATAA);
+    iconData.hWnd = parentWindow;
+    iconData.uID = NOTIF_ICON_ID;
     Shell_NotifyIconA(NIM_DELETE, &iconData);
 
     return 0;
 }
 
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    int WM_TASKBARCREATED = RegisterWindowMessageA("TaskbarCreated");
+
     switch(uMsg) {
         case WM_ICON_MESSAGE:
             switch(lParam) {
@@ -148,7 +140,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                     NOTIFYICONDATAA iconData = {0}; 
                     iconData.cbSize = sizeof(NOTIFYICONDATAA);
                     iconData.hWnd = hWnd;
-                    iconData.uID = ICON_ID;
+                    iconData.uID = NOTIF_ICON_ID;
                     iconData.uFlags = NIF_TIP;
                     memcpy(iconData.szTip, szTip, strlen(szTip));
 
@@ -203,8 +195,29 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             return 0;
 
         default:
+            if(uMsg == WM_TASKBARCREATED) {
+                // Taskbar crashed and has been restarted
+                createNotifIcon(hWnd);
+                return 0;
+            }
+
             return DefWindowProc(hWnd, uMsg, wParam, lParam);
     }
+}
+
+void createNotifIcon(HWND parentWindow) {
+    char *szTip = "PowerPlayer";
+
+    NOTIFYICONDATAA iconData = {0};
+    iconData.cbSize = sizeof(NOTIFYICONDATAA);
+    iconData.hWnd = parentWindow;
+    iconData.uID = NOTIF_ICON_ID;
+    iconData.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
+    iconData.uCallbackMessage = WM_ICON_MESSAGE;
+    iconData.hIcon = LoadIconA((HINSTANCE) GetWindowLong(parentWindow, GWL_HINSTANCE), "MainIcon");
+    memcpy(iconData.szTip, szTip, strlen(szTip));
+
+    Shell_NotifyIconA(NIM_ADD, &iconData);
 }
 
 HMENU buildMenu(HWND parentWindow, ListNode *schemeList) {
