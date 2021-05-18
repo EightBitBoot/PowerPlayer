@@ -77,6 +77,14 @@ void openPowerSettings();
 static int WM_TASKBARCREATED;
 
 int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
+    // Create a named mutex on boot so that only one instance of the program runs at a timne
+    // If the mutex already exists, the implication is that the program is already running and
+    // created the mutex
+    HANDLE mutex = CreateMutexA(NULL, true, "PowerPlayer");
+    if(GetLastError() == ERROR_ALREADY_EXISTS) {
+        return 0;
+    }
+
     WNDCLASSA windowClass = {0};
     windowClass.lpfnWndProc = &WindowProc;
     windowClass.hInstance = hInstance;
